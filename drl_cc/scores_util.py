@@ -4,7 +4,7 @@ from typing import Union
 import pandas as pd
 import plotnine as gg
 
-from banana_nav import config as cfg, path_util
+from drl_cc import config as cfg, path_util
 
 
 def read_scores(p: Union[pathlib.Path, str]):
@@ -13,7 +13,7 @@ def read_scores(p: Union[pathlib.Path, str]):
 
 def plot_scores(df, title=None, xlab=None, ylab=None):
     g = (
-        gg.ggplot(df, gg.aes(x=cfg.SCORE_COLNAME_X, y=cfg.SCORE_COLNAME_Y)) +
+        gg.ggplot(df, gg.aes(x=cfg.COL_EPISODE, y=cfg.COL_SCORE)) +
         gg.geom_line())
     if title is not None:
         g += gg.ggtitle(title)

@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from drl_ctrl.model import ActorNetwork, CriticNetwork
+from drl_cc.model import ActorNetwork, CriticNetwork
 
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -33,7 +33,6 @@ class DDPGAgent:
             num_updates: int = 20,
             ou_noise_mu: float = 0.0,
             ou_noise_theta: float = 0.15,
-            ou_noise_sigma: float = 0.1,
             seed: int = 0):
         """
 
@@ -83,7 +82,6 @@ class DDPGAgent:
         self.num_updates = num_updates
         self.ou_noise_mu = ou_noise_mu
         self.ou_noise_theta = ou_noise_theta
-        self.ou_noise_sigma = ou_noise_sigma
         self.seed = random.seed(seed)
 
         # Actor Network (w/ Target Network)
@@ -102,7 +100,7 @@ class DDPGAgent:
         # Noise process
         self.noise = OUNoise(
             (num_agents, action_size),
-            seed, ou_noise_mu, ou_noise_theta, ou_noise_sigma)
+            seed, ou_noise_mu, ou_noise_theta)
 
         # Replay memory
         self.memory = ReplayBuffer(action_size, buffer_size, batch_size, seed)
@@ -128,7 +126,6 @@ class DDPGAgent:
             'critic_local': self.critic_local.metadata,
             'ou_noise_mu': self.ou_noise_mu,
             'ou_noise_theta': self.ou_noise_theta,
-            'ou_noise_sigma': self.ou_noise_sigma,
             'seed': self.seed,
         }
 
@@ -146,7 +143,7 @@ class DDPGAgent:
                     experiences = self.memory.sample()
                     self.learn(experiences, self.gamma_discount_factor)
 
-    def act(self, states, add_noise=True):
+    def act(self, states, ou_noise_sigma=0.2, add_noise=True):
         """Returns actions for given state as per current policy."""
         states = torch.from_numpy(states).float().to(DEVICE)
         self.actor_local.eval()
@@ -154,7 +151,7 @@ class DDPGAgent:
             action = self.actor_local(states).cpu().data.numpy()
         self.actor_local.train()
         if add_noise:
-            action += self.noise.sample()
+            action += self.noise.sample(ou_noise_sigma)
         return np.clip(action, -1.0, 1.0)
 
     def reset(self):
@@ -230,12 +227,11 @@ def _soft_update(local_model, target_model, tau):
 class OUNoise:
     """Ornstein-Uhlenbeck process."""
 
-    def __init__(self, shape, seed, mu=0., theta=0.15, sigma=0.1):
+    def __init__(self, shape, seed, mu=0., theta=0.15):
         """Initialize parameters and noise process."""
         self.state = None
         self.mu = mu * np.ones(shape)
         self.theta = theta
-        self.sigma = sigma
         self.seed = random.seed(seed)
         self.reset()
 
@@ -243,10 +239,10 @@ class OUNoise:
         """Reset the internal state (= noise) to mean (mu)."""
         self.state = copy.copy(self.mu)
 
-    def sample(self):
+    def sample(self, sigma=0.2):
         """Update internal state and return it as a noise sample."""
         x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(*x.shape)
+        dx = self.theta * (self.mu - x) + sigma * np.random.randn(*x.shape)
         self.state = x + dx
         return self.state
 

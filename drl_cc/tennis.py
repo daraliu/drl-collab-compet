@@ -1,6 +1,7 @@
 import json
 import logging
 import pathlib
+import time
 from collections import deque
 
 import numpy as np
@@ -30,19 +31,22 @@ def training(
         has_ou_noise: bool = True,
         ou_noise_mu: float = 0.0,
         ou_noise_theta: float = 0.15,
-        ou_noise_sigma: float = 0.1,
+        ou_noise_sigma_start: float = 0.5,
+        ou_noise_sigma_end: float = 0.01,
+        ou_noise_sigma_decay: float = 0.999,
         n_episodes: int = 500,
         mean_score_threshold: float = 30.0,
         max_t: int = 1000,
+        n_random_episodes: int = 100,
         agent_seed=111_111,
         logging_freq: int = 10):
     """
-    Train agent for Unity Reacher environment and save results.
+    Train agent for Unity Tennis environment and save results.
 
-    Train a deep reinforcement learning agent (Reacher) or 20 agents (Reacher20)
-    to reach surfaces of spheres with a two joint arm in Unity Environment and
-    save results (training scores, agent neural network model weights,
-    metadata with hyper-parameters) to provided output directory.
+    Train a deep reinforcement learning Tennis agent and
+    save results (training scores, time taken by episode and total,
+    agent neural network model weights, metadata with hyper-parameters)
+    to provided output directory.
 
     Parameters
     ----------
@@ -76,14 +80,20 @@ def training(
         Ornstein-Uhlenbeck process mu parameter
     ou_noise_theta
         Ornstein-Uhlenbeck process theta parameter
-    ou_noise_sigma
-        Ornstein-Uhlenbeck process sigma parameter
+    ou_noise_sigma_start
+        Ornstein-Uhlenbeck noise sigma starting value per episode
+    ou_noise_sigma_end
+        Ornstein-Uhlenbeck noise sigma minimum value per episode
+    ou_noise_sigma_decay
+        Ornstein-Uhlenbeck noise sigma multiplicative decay
     n_episodes
         Maximum number of episodes
     mean_score_threshold
         Threshold of mean last 100 weights to stop training and save results
     max_t:
         Maximum number of time steps per episode
+    n_random_episodes
+        Number of random episodes to gather experience
     agent_seed
         Random seed for agent epsilon-greedy policy
     logging_freq
@@ -126,16 +136,19 @@ def training(
         num_updates=num_updates,
         ou_noise_mu=ou_noise_mu,
         ou_noise_theta=ou_noise_theta,
-        ou_noise_sigma=ou_noise_sigma,
         seed=agent_seed)
 
-    scores = train_agent(
+    scores_df = train_agent(
         env=env,
         agent=agent,
         n_episodes=n_episodes,
         mean_score_threshold=mean_score_threshold,
         max_t=max_t,
         has_ou_noise=has_ou_noise,
+        ou_noise_sigma_start=ou_noise_sigma_start,
+        ou_noise_sigma_end=ou_noise_sigma_end,
+        ou_noise_sigma_decay=ou_noise_sigma_decay,
+        n_random_episodes=n_random_episodes,
         logging_freq=logging_freq)
 
     logger.info(f'Saving actor network model weights to {str(path_weights_actor)}')
@@ -147,9 +160,6 @@ def training(
     logger.info(f'Critic model weights saved successfully!')
 
     logger.info(f'Saving training scores to {str(path_scores)}')
-    scores_df = pd.DataFrame.from_records(
-        enumerate(scores, start=1),
-        columns=(cfg.SCORE_COLNAME_X, cfg.SCORE_COLNAME_Y))
     logger.info(f'Training scores saved successfully!')
 
     scores_df.to_csv(path_scores, index=False)
@@ -175,10 +185,15 @@ def train_agent(
         mean_score_threshold: float = 30.0,
         max_t: int = 1000,
         has_ou_noise: bool = True,
-        logging_freq: int = 10,
-        scores_maxlen: int = 100) -> typing.List[float]:
+        scores_maxlen: int = 100,
+        ou_noise_sigma_start: float = 0.5,
+        ou_noise_sigma_end: float = 0.01,
+        ou_noise_sigma_decay: float = 0.99,
+        n_random_episodes: int = 100,
+        logging_freq: int = 10
+) -> pd.DataFrame:
     """
-    Train agent for Unity Reacher environment and return scores.
+    Train agent for Unity Tennis environment and return results.
 
     Parameters
     ----------
@@ -194,19 +209,35 @@ def train_agent(
         Maximum number of time steps per episode
     has_ou_noise
         If True, Ornstein-Uhlenbeck noise is added to actions
-    logging_freq
-        Logging frequency
     scores_maxlen
         Maximum length of scores window
+    ou_noise_sigma_start
+        Ornstein-Uhlenbeck noise sigma starting value per episode
+    ou_noise_sigma_end
+        Ornstein-Uhlenbeck noise sigma minimum value per episode
+    ou_noise_sigma_decay
+        Ornstein-Uhlenbeck noise sigma multiplicative decay
+    n_random_episodes
+        Number of random episodes to gather experience
+    logging_freq
+        Logging frequency
 
     """
 
     logger = logging.getLogger(__name__)
 
     scores = []
+    scores_avg100 = []
     scores_window = deque(maxlen=scores_maxlen)
+    time_started = time.time()
+    times_total = []
+    times_per_episode = []
+    time_steps = []
 
-    for i_episode in range(1, n_episodes+1):
+    for i_episode in range(1, (n_random_episodes + n_episodes + 1)):
+
+        time_started_episode = time.time()
+
         brain_name = env.brain_names[0]
         env_info = env.reset(train_mode=True)[brain_name]
         agent.reset()
@@ -214,9 +245,18 @@ def train_agent(
         num_agents = len(env_info.agents)
         agent_scores = np.zeros(num_agents)
 
-        for t in range(max_t):
+        ou_noise_sigma = ou_noise_sigma_start
+
+        t = 1
+        while True:
             # choose action (for each agent)
-            actions = agent.act(states, add_noise=has_ou_noise)
+            if i_episode <= n_random_episodes:
+                action_size = env.brains[brain_name].vector_action_space_size
+                actions = np.random.randn(num_agents, action_size)
+                actions = np.clip(actions, -1, 1)
+            else:
+                actions = agent.act(states, ou_noise_sigma=ou_noise_sigma, add_noise=has_ou_noise)
+            ou_noise_sigma = max(ou_noise_sigma_end, ou_noise_sigma * ou_noise_sigma_decay)
 
             # take action in the environment(for each agent)
             env_info = env.step(actions)[brain_name]
@@ -230,7 +270,10 @@ def train_agent(
             # update the score (for each agent)
             agent_scores += env_info.rewards
 
-            agent.step(states, actions, env_info.rewards, next_states, dones)
+            if i_episode <= n_random_episodes:
+                agent.memory.add_batch(states, actions, env_info.rewards, next_states, dones)
+            else:
+                agent.step(states, actions, env_info.rewards, next_states, dones)
 
             # roll over states to next time step
             states = next_states
@@ -238,25 +281,45 @@ def train_agent(
             # exit loop if episode finished
             if np.any(dones):
                 break
+            t += 1
 
         score = float(np.max(agent_scores))
         scores_window.append(score)
         scores.append(score)
+        scores_avg100.append(np.mean(scores_window))
+
+        times_total.append(time.time() - time_started)
+        times_per_episode.append(time.time() - time_started_episode)
+        time_steps.append(t)
 
         if i_episode % logging_freq == 0:
             logger.info(
-                f'\rEpisode {i_episode}'
+                f'\rEp: {i_episode}'
+                f'\tSigma({t}): {ou_noise_sigma:.3f}'
                 f'\tScore: {score:.2f}'
-                f'\tAverage Score: {np.mean(scores_window):.2f}')
+                f'\tAvg. Score: {np.mean(scores_window):.2f}'
+                f'\tTime_e: {times_per_episode[-1]:.3f}s'
+                f'\tTime: {times_total[-1]:.3f}s')
 
         if len(scores_window) == scores_maxlen and np.mean(scores_window) >= mean_score_threshold:
             logger.info(
                 f'\nEnvironment solved in {i_episode-100:d} episodes!'
                 f'\nScore: {score:.2f}'
-                f'\tAverage Score: {np.mean(scores_window):.2f}')
+                f'\tAverage Score: {np.mean(scores_window):.2f}'
+                f'\tAverage Time_e: {np.mean(times_per_episode):.3f}s'
+                f'\tTotal Time: {times_total[-1]:.3f}s')
             break
 
-    return scores
+    return pd.DataFrame.from_records(
+        zip(range(len(scores)), scores, scores_avg100, time_steps, times_per_episode, times_total),
+        columns=[
+            cfg.COL_EPISODE,
+            cfg.COL_SCORE,
+            cfg.COL_SCORE_AVG100,
+            cfg.COL_N_TIME_STEPS,
+            cfg.COL_TIME_PER_EPISODE,
+            cfg.COL_TIME_TOTAL
+        ])
 
 
 def demo(

@@ -1,6 +1,6 @@
 import pathlib
 
-from drl_ctrl import config as cfg
+from drl_cc import config as cfg
 
 
 def mk_path_weights_actor(dir_output):
