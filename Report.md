@@ -89,7 +89,7 @@ agents have began training.
 We see that multiple runs with the same hyper parameters (agents 1, 2 vs 3, 4) can show varying results. 
 However, we also see that the environment be solved in less than 600 episodes (by looking at 3/4 cases).
 
-![](https://github.com/daraliu/drl-continuous-control/blob/master/img/best_agent_so_far.png)
+![](https://github.com/daraliu/drl-collab-compet/blob/master/img/best_agent_so_far.png)
 
 
 
