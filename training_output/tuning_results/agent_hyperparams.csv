@@ -1,0 +1,5 @@
+agent_id,batch_size,buffer_size,num_updates,update_every,n_episodes_to_solve
+0,128,100000,5,1,533
+1,128,100000,5,1,542
+2,1024,1000000,10,2,595
+3,1024,1000000,10,2,927
