@@ -39,6 +39,7 @@ def training(
         max_t: int = 1000,
         n_random_episodes: int = 100,
         agent_seed=111_111,
+        has_checkpoints: bool = False,
         logging_freq: int = 10):
     """
     Train agent for Unity Tennis environment and save results.
@@ -96,6 +97,10 @@ def training(
         Number of random episodes to gather experience
     agent_seed
         Random seed for agent epsilon-greedy policy
+    has_checkpoints
+        If True, does not stop training after reaching threshold, but
+        saves model every 50 episodes when agents are above threshold
+        until n_episodes + n_random_episodes is reached
     logging_freq
         Logging frequency
 
@@ -138,6 +143,8 @@ def training(
         ou_noise_theta=ou_noise_theta,
         seed=agent_seed)
 
+    checkpoints_dir = output_dir.joinpath("checkpoints") if has_checkpoints else None
+
     scores_df = train_agent(
         env=env,
         agent=agent,
@@ -150,7 +157,7 @@ def training(
         ou_noise_sigma_decay=ou_noise_sigma_decay,
         n_random_episodes=n_random_episodes,
         logging_freq=logging_freq,
-        checkpoints_dir=output_dir.joinpath("checkpoints"))
+        checkpoints_dir=checkpoints_dir)
 
     logger.info(f'Saving actor network model weights to {str(path_weights_actor)}')
     torch.save(agent.actor_local.state_dict(), str(path_weights_actor))
