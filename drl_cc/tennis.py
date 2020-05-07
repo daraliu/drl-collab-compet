@@ -107,8 +107,8 @@ def training(
     logger.info(f"Ensuring output directory exists: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    path_weights_actor = path_util.mk_path_weights_actor(output_dir)
-    path_weights_critic = path_util.mk_path_weights_critic(output_dir)
+    path_weights_actor = path_util.mk_path_weights_actor_local(output_dir)
+    path_weights_critic = path_util.mk_path_weights_critic_local(output_dir)
     path_scores = path_util.mk_path_scores(output_dir)
     path_metadata = path_util.mk_path_metadata(output_dir)
 
@@ -149,7 +149,8 @@ def training(
         ou_noise_sigma_end=ou_noise_sigma_end,
         ou_noise_sigma_decay=ou_noise_sigma_decay,
         n_random_episodes=n_random_episodes,
-        logging_freq=logging_freq)
+        logging_freq=logging_freq,
+        checkpoints_dir=output_dir.joinpath("checkpoints"))
 
     logger.info(f'Saving actor network model weights to {str(path_weights_actor)}')
     torch.save(agent.actor_local.state_dict(), str(path_weights_actor))
@@ -190,7 +191,9 @@ def train_agent(
         ou_noise_sigma_end: float = 0.01,
         ou_noise_sigma_decay: float = 0.99,
         n_random_episodes: int = 100,
-        logging_freq: int = 10
+        logging_freq: int = 10,
+        checkpoints_dir: typing.Optional[pathlib.Path] = None,
+        checkpoints_freq: int = 50,
 ) -> pd.DataFrame:
     """
     Train agent for Unity Tennis environment and return results.
@@ -221,6 +224,10 @@ def train_agent(
         Number of random episodes to gather experience
     logging_freq
         Logging frequency
+    checkpoints_dir
+        Model checkpoints output directory
+    checkpoints_freq
+        Checkpoint frequency to check if agent scores achieves average score threshold
 
     """
 
@@ -302,13 +309,28 @@ def train_agent(
                 f'\tTime: {times_total[-1]:.3f}s')
 
         if len(scores_window) == scores_maxlen and np.mean(scores_window) >= mean_score_threshold:
-            logger.info(
-                f'\nEnvironment solved in {i_episode-100:d} episodes!'
-                f'\nScore: {score:.2f}'
-                f'\tAverage Score: {np.mean(scores_window):.2f}'
-                f'\tAverage Time_e: {np.mean(times_per_episode):.3f}s'
-                f'\tTotal Time: {times_total[-1]:.3f}s')
-            break
+            if checkpoints_dir is not None:
+                checkpoint_dir = checkpoints_dir.joinpath(f"episode_{i_episode}")
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                
+                torch.save(agent.actor_local.state_dict(),
+                           str(path_util.mk_path_weights_actor_local(checkpoint_dir)))
+                torch.save(agent.actor_target.state_dict(),
+                           str(path_util.mk_path_weights_actor_target(checkpoint_dir)))
+                torch.save(agent.critic_local.state_dict(),
+                           str(path_util.mk_path_weights_critic_local(checkpoint_dir)))
+                torch.save(agent.critic_target.state_dict(),
+                           str(path_util.mk_path_weights_critic_target(checkpoints_dir)))
+
+                logger.info(f'\nSaved model checkpoint to {str(checkpoints_dir)}')
+            else:
+                logger.info(
+                    f'\nEnvironment solved in {i_episode - 100:d} episodes!'
+                    f'\nScore: {score:.2f}'
+                    f'\tAverage Score: {np.mean(scores_window):.2f}'
+                    f'\tAverage Time_e: {np.mean(times_per_episode):.3f}s'
+                    f'\tTotal Time: {times_total[-1]:.3f}s')
+                break
 
     return pd.DataFrame.from_records(
         zip(range(len(scores)), scores, scores_avg100, time_steps, times_per_episode, times_total),
@@ -352,8 +374,8 @@ def demo(
         state_size = len(state)
 
         agent = agents.DDPGAgent(state_size=state_size, action_size=action_size, num_agents=20)
-        agent.actor_local.load_state_dict(torch.load(path_util.mk_path_weights_actor(dir_model)))
-        agent.critic_local.load_state_dict(torch.load(path_util.mk_path_weights_critic(dir_model)))
+        agent.actor_local.load_state_dict(torch.load(path_util.mk_path_weights_actor_local(dir_model)))
+        agent.critic_local.load_state_dict(torch.load(path_util.mk_path_weights_critic_local(dir_model)))
 
         return demo_trained(env, agent)
     else:

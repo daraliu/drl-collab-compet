@@ -1,6 +1,8 @@
 FILENAME_SCORES = 'scores.csv'
 FILENAME_WEIGHTS_ACTOR = 'weights_actor.pth'
+FILENAME_WEIGHTS_ACTOR_TARGET = 'weights_actor_target.pth'
 FILENAME_WEIGHTS_CRITIC = 'weights_critic.pth'
+FILENAME_WEIGHTS_CRITIC_TARGET = 'weights_critic_target.pth'
 FILENAME_METADATA = 'metadata.json'
 
 COL_EPISODE = "episode"
