@@ -7,11 +7,11 @@ This project solves the [Tennis](https://github.com/Unity-Technologies/ml-agents
 
 **Random Agent**
 
-![Random](img/p2-continuous-control-random.gif)
+![Random](img/p3-tennis-random.gif)
 
 **Trained Agent**
 
-![Trained](img/p2-continuous-control-trained.gif)
+![Trained](img/p3-tennis-trained.gif)
 
 
 
