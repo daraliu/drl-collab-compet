@@ -40,6 +40,7 @@ def training(
         n_random_episodes: int = 100,
         agent_seed=111_111,
         has_checkpoints: bool = False,
+        checkpoints_freq: int = 50,
         logging_freq: int = 10):
     """
     Train agent for Unity Tennis environment and save results.
@@ -157,7 +158,8 @@ def training(
         ou_noise_sigma_decay=ou_noise_sigma_decay,
         n_random_episodes=n_random_episodes,
         logging_freq=logging_freq,
-        checkpoints_dir=checkpoints_dir)
+        checkpoints_dir=checkpoints_dir,
+        checkpoints_freq=checkpoints_freq)
 
     logger.info(f'Saving actor network model weights to {str(path_weights_actor)}')
     torch.save(agent.actor_local.state_dict(), str(path_weights_actor))
@@ -248,6 +250,7 @@ def train_agent(
     times_per_episode = []
     time_steps = []
 
+    i_last_checkpoint = 0
     for i_episode in range(1, (n_random_episodes + n_episodes + 1)):
 
         time_started_episode = time.time()
@@ -316,7 +319,8 @@ def train_agent(
                 f'\tTime: {times_total[-1]:.3f}s')
 
         if len(scores_window) == scores_maxlen and np.mean(scores_window) >= mean_score_threshold:
-            if checkpoints_dir is not None:
+            if (checkpoints_dir is not None
+                    and ((i_episode - i_last_checkpoint) % checkpoints_freq) == 0):
                 checkpoint_dir = checkpoints_dir.joinpath(f"episode_{i_episode}")
                 checkpoint_dir.mkdir(parents=True, exist_ok=True)
                 
