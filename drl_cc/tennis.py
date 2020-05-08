@@ -380,9 +380,14 @@ def demo(
         state = env_info.vector_observations[0]
         state_size = len(state)
 
-        agent = agents.DDPGAgent(state_size=state_size, action_size=action_size, num_agents=20)
-        agent.actor_local.load_state_dict(torch.load(path_util.mk_path_weights_actor_local(dir_model)))
-        agent.critic_local.load_state_dict(torch.load(path_util.mk_path_weights_critic_local(dir_model)))
+        agent = agents.DDPGAgent(
+            state_size=state_size,
+            action_size=action_size,
+            num_agents=len(env_info.agents))
+        agent.actor_local.load_state_dict(
+            torch.load(path_util.mk_path_weights_actor_local(dir_model)))
+        agent.critic_local.load_state_dict(
+            torch.load(path_util.mk_path_weights_critic_local(dir_model)))
 
         return demo_trained(env, agent)
     else:
