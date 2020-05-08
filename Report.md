@@ -96,7 +96,7 @@ However, we also see that the environment be solved in less than 600 episodes (b
 ## Ideas for Future Work
 
 To improve agent training stability and performance, the following steps could be taken:
-- Implement Prioritised Experienced Replay
+- Implement [Prioritized Experience Replay](https://arxiv.org/abs/1511.05952)
 - Perform more thorough hyper parameter turing and analysis - multiple runs per hyper parameter set to evaluate their stability, do more exploration in hyper parameter space to draw better conclusions DDPG and Tennis environment.
 - Implement [Multi-agent Deep Deterministic Policy Gradients (MADDPG)](https://papers.nips.cc/paper/7217-multi-agent-actor-critic-for-mixed-cooperative-competitive-environments.pdf).
 - Experiment with more Neural Network architectures - evaluate trade-off between simpler networks for faster and more stable learning versus complex networks for greater score.
